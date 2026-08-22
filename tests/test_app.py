@@ -33,6 +33,7 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
                 "recall_study_passages",
                 "search",
                 "retrieve",
+                "next_hop_with_limit",
                 "next_route_node",
             ],
         )
@@ -43,6 +44,12 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
         for alias in tools[1:3]:
             self.assertEqual(alias.inputSchema["required"], ["query"])
             self.assertEqual(alias.inputSchema["properties"]["query"]["type"], "string")
+
+        limited_schema = tools[3].inputSchema
+        self.assertEqual(
+            limited_schema["required"],
+            ["map_id", "current_node", "destination", "hops_remaining"],
+        )
 
     async def test_observed_retrieval_aliases_return_passages(self) -> None:
         with patch(
@@ -61,6 +68,28 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
             retrieve_result.structured_content, {"result": ["source evidence"]}
         )
         recall.assert_has_calls([call("first question"), call("second question")])
+
+    async def test_hop_limited_tool_requires_and_forwards_allowance(self) -> None:
+        with patch("app.next_route_node", return_value="N08") as route:
+            async with Client(mcp) as client:
+                result = await client.call_tool(
+                    "next_hop_with_limit",
+                    {
+                        "map_id": "opaque==",
+                        "current_node": "N10",
+                        "destination": "N05",
+                        "hops_remaining": 4,
+                    },
+                )
+
+        self.assertEqual(result.structured_content, {"result": "N08"})
+        route.assert_called_once_with(
+            map_id="opaque==",
+            current_node="N10",
+            destination="N05",
+            hops_remaining=4,
+            avoid_nodes=None,
+        )
 
 
 if __name__ == "__main__":

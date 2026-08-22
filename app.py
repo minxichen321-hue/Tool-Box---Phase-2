@@ -50,6 +50,32 @@ def retrieve_tool(query: str) -> list[str]:
 
 
 @mcp.tool(
+    name="next_hop_with_limit",
+    description=(
+        "Always call this for a journey that states a hop or edge allowance. "
+        "Returns exactly the next adjacent node on the cheapest directed route "
+        "that can still reach the destination. hops_remaining is required and "
+        "includes the move being requested; pass the full allowance first and "
+        "decrement it after every move."
+    ),
+)
+def next_hop_with_limit_tool(
+    map_id: str,
+    current_node: str,
+    destination: str,
+    hops_remaining: int,
+    avoid_nodes: list[str] | None = None,
+) -> str:
+    return next_route_node(
+        map_id=map_id,
+        current_node=current_node,
+        destination=destination,
+        hops_remaining=hops_remaining,
+        avoid_nodes=avoid_nodes,
+    )
+
+
+@mcp.tool(
     name="next_route_node",
     description=(
         "Use at every journey step. Returns exactly the adjacent next node on a "
@@ -91,6 +117,7 @@ async def health() -> dict[str, object]:
             "recall_study_passages",
             "search",
             "retrieve",
+            "next_hop_with_limit",
             "next_route_node",
         ],
     }

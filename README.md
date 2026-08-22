@@ -4,12 +4,14 @@ FastMCP solution for **Stage 2 — School Days**.
 
 ## MCP tools
 
-- `recall_study_passages(question)` downloads and indexes the five assigned
+- `recall_study_passages(question)` loads and indexes the five bundled assigned
   documents, then returns the most relevant source passages as `list[str]`.
   The passages are counted with `o200k_base` and never exceed the stage's
   combined 900-token recall limit.
 - `search(query)` and `retrieve(query)` are compatibility aliases for the same
   retrieval logic, matching the generic names the evaluation agent may choose.
+- `next_hop_with_limit(...)` is the explicit tool for journeys with a remaining
+  hop allowance; its `hops_remaining` parameter is required.
 - `next_route_node(map_id, current_node, destination, hops_remaining,
   avoid_nodes)` fetches the opaque directed map and returns the adjacent next
   node on a least-cost route. It includes both edge weights and destination
@@ -17,6 +19,11 @@ FastMCP solution for **Stage 2 — School Days**.
 
 These two tools also compose for school-trip questions: recall the `STOP_XX`
 destination first, then traverse to that exact destination one node at a time.
+
+The five official study documents are bundled in `study_materials/`, so recall
+does not depend on an outbound network request during a scored attempt. The
+challenge document endpoints remain a fallback for development environments
+where those files are absent.
 
 The Streamable HTTP MCP endpoint is exposed at `/mcp` (and `/mcp/`). A health
 endpoint is available at `/health`.

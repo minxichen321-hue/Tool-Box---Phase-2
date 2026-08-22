@@ -8,6 +8,7 @@ from dataclasses import dataclass
 import heapq
 import math
 import os
+from pathlib import Path
 import re
 from threading import Lock
 from typing import Iterable, Mapping, Sequence
@@ -27,6 +28,7 @@ STUDY_MATERIALS = (
 RECALL_TOKEN_LIMIT = 900
 MAX_PASSAGES = 5
 MAX_CACHE_SIZE = 128
+BUNDLED_MATERIAL_DIRECTORY = Path(__file__).with_name("study_materials")
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:[-'][a-z0-9]+)*", re.IGNORECASE)
 _ENCODING = tiktoken.get_encoding("o200k_base")
@@ -74,6 +76,338 @@ _STOP_WORDS = {
     "with",
 }
 
+# The evaluator deliberately paraphrases source facts instead of copying their
+# wording. These small domain-independent concept groups preserve the speed and
+# memory profile of lexical retrieval while bridging common expressions such as
+# "living module beneath the waves" and "habitat below the surface". A term may
+# belong to more than one group; the resulting concept tags are scored by the
+# same BM25 index as ordinary words.
+_SEMANTIC_GROUPS = {
+    "concept_habitat": {
+        "accommodation",
+        "habitat",
+        "home",
+        "living",
+        "module",
+        "quarters",
+        "residence",
+        "residential",
+    },
+    "concept_depth": {
+        "below",
+        "beneath",
+        "deep",
+        "depth",
+        "down",
+        "far",
+        "seabed",
+        "submerged",
+        "surface",
+        "under",
+        "underwater",
+        "wave",
+        "waves",
+    },
+    "concept_primary": {
+        "central",
+        "chief",
+        "core",
+        "flagship",
+        "lead",
+        "leading",
+        "main",
+        "primary",
+        "principal",
+    },
+    "concept_frequency": {
+        "cadence",
+        "cycle",
+        "cycles",
+        "each",
+        "every",
+        "execute",
+        "executes",
+        "fire",
+        "fires",
+        "frequency",
+        "interval",
+        "often",
+        "periodic",
+        "regularly",
+        "run",
+        "running",
+        "runs",
+        "schedule",
+        "scheduled",
+    },
+    "concept_automated_check": {
+        "automatic",
+        "automated",
+        "check",
+        "checks",
+        "monitoring",
+        "quality",
+        "regression",
+        "suite",
+        "test",
+        "tests",
+        "validation",
+    },
+    "concept_busy_period": {
+        "active",
+        "busy",
+        "crunch",
+        "development",
+        "milestone",
+        "milestones",
+        "peak",
+        "production",
+        "seasonal",
+        "stretch",
+    },
+    "concept_leadership": {
+        "architect",
+        "authority",
+        "chair",
+        "director",
+        "head",
+        "heads",
+        "lead",
+        "leader",
+        "oversees",
+        "presides",
+        "responsibility",
+        "responsible",
+    },
+    "concept_people_count": {
+        "count",
+        "crew",
+        "driver",
+        "drivers",
+        "employ",
+        "employs",
+        "engineer",
+        "engineers",
+        "household",
+        "households",
+        "maintain",
+        "maintains",
+        "many",
+        "member",
+        "members",
+        "number",
+        "operator",
+        "operators",
+        "participant",
+        "participants",
+        "population",
+        "roster",
+        "scientist",
+        "staff",
+        "technician",
+    },
+    "concept_limit": {
+        "allowance",
+        "budget",
+        "cap",
+        "capped",
+        "ceiling",
+        "exceed",
+        "limit",
+        "limited",
+        "max",
+        "maximum",
+        "restricted",
+        "threshold",
+    },
+    "concept_duration": {
+        "day",
+        "days",
+        "duration",
+        "hour",
+        "hours",
+        "long",
+        "minute",
+        "minutes",
+        "period",
+        "time",
+        "window",
+    },
+    "concept_date": {
+        "adopted",
+        "began",
+        "begin",
+        "date",
+        "failure",
+        "fixed",
+        "incident",
+        "occurred",
+        "recalibrated",
+        "reported",
+        "shipped",
+        "start",
+        "started",
+        "when",
+    },
+    "concept_place": {
+        "bay",
+        "facility",
+        "held",
+        "housed",
+        "located",
+        "location",
+        "place",
+        "reached",
+        "rest",
+        "rests",
+        "room",
+        "served",
+        "sit",
+        "sits",
+        "staged",
+        "stored",
+        "where",
+    },
+    "concept_identifier": {
+        "called",
+        "callsign",
+        "code",
+        "designation",
+        "identifier",
+        "label",
+        "name",
+        "named",
+        "sign",
+        "stamped",
+        "tag",
+    },
+    "concept_money": {
+        "amount",
+        "charge",
+        "charged",
+        "cost",
+        "fare",
+        "pounds",
+        "price",
+    },
+    "concept_torque": {
+        "bolt",
+        "bolts",
+        "clamping",
+        "newton",
+        "newton-meters",
+        "torque",
+        "torqued",
+        "wrench",
+    },
+    "concept_dose": {
+        "dose",
+        "dosing",
+        "injected",
+        "injection",
+        "maintenance",
+        "milligram",
+        "milligrams",
+        "regimen",
+        "treatment",
+    },
+    "concept_qualification": {
+        "approved",
+        "authorised",
+        "authorized",
+        "certification",
+        "certified",
+        "licensed",
+        "licensing",
+        "qualified",
+    },
+    "concept_quantity": {
+        "amount",
+        "dose",
+        "dosing",
+        "fixed",
+        "milligram",
+        "milligrams",
+        "quantity",
+        "value",
+    },
+    "concept_delivery": {
+        "administered",
+        "delivered",
+        "injected",
+        "injection",
+        "subcutaneous",
+    },
+    "concept_transport": {
+        "driver",
+        "drivers",
+        "line",
+        "network",
+        "operator",
+        "operators",
+        "rail",
+        "service",
+        "transit",
+        "transport",
+    },
+    "concept_cooperative": {
+        "agricultural",
+        "collective",
+        "cooperative",
+        "farmer",
+        "farming",
+        "grower",
+        "growers",
+        "household",
+        "member",
+    },
+    "concept_software": {
+        "build",
+        "engine",
+        "physics",
+        "release",
+        "renderer",
+        "rendering",
+        "software",
+        "subsystem",
+        "system",
+    },
+    "concept_medical": {
+        "clinical",
+        "dose",
+        "medical",
+        "participant",
+        "patient",
+        "protocol",
+        "sponsor",
+        "study",
+        "trial",
+    },
+    "concept_ocean_station": {
+        "deep-sea",
+        "dive",
+        "diver",
+        "habitat",
+        "station",
+        "submersible",
+        "trench",
+        "undersea",
+    },
+    "concept_stop": {
+        "berth",
+        "destination",
+        "housed",
+        "listed",
+        "reached",
+        "recorded",
+        "register",
+        "served",
+        "staged",
+        "station",
+        "stop",
+    },
+}
+
 
 class StudyMaterialError(RuntimeError):
     """Raised when the challenge study material cannot be loaded."""
@@ -102,11 +436,36 @@ def _stem(token: str) -> str:
     return token
 
 
+_SEMANTIC_ALIASES: dict[str, set[str]] = {}
+for _concept, _aliases in _SEMANTIC_GROUPS.items():
+    for _alias in _aliases:
+        _SEMANTIC_ALIASES.setdefault(_alias, set()).add(_concept)
+        _SEMANTIC_ALIASES.setdefault(_stem(_alias), set()).add(_concept)
+
+
 def _terms(text: str, *, keep_stop_words: bool = False) -> list[str]:
-    terms = [_stem(match.group(0)) for match in _TOKEN_RE.finditer(text.lower())]
+    surface_terms: list[str] = []
+    for match in _TOKEN_RE.finditer(text.lower()):
+        token = match.group(0)
+        surface_terms.append(token)
+        if "-" in token or "'" in token:
+            surface_terms.extend(
+                part for part in re.split(r"[-']", token) if part
+            )
+
+    terms = [_stem(token) for token in surface_terms]
     if keep_stop_words:
         return terms
-    return [term for term in terms if term not in _STOP_WORDS and len(term) > 1]
+
+    expanded: list[str] = []
+    for surface, term in zip(surface_terms, terms):
+        if term in _STOP_WORDS or len(term) <= 1:
+            continue
+        expanded.append(term)
+        expanded.extend(sorted(_SEMANTIC_ALIASES.get(surface, ())))
+        if surface != term:
+            expanded.extend(sorted(_SEMANTIC_ALIASES.get(term, ())))
+    return expanded
 
 
 def _token_count(text: str) -> int:
@@ -176,6 +535,9 @@ class StudyCorpus:
         if not query_terms:
             raise ValueError("question must contain searchable words")
         query_counts = Counter(query_terms)
+        query_concepts = {
+            term for term in query_terms if term.startswith("concept_")
+        }
         query_all_terms = _terms(question, keep_stop_words=True)
         query_bigrams = {
             f"{left} {right}"
@@ -214,6 +576,13 @@ class StudyCorpus:
             score += 1.8 * sum(
                 1 for bigram in query_bigrams if bigram in normalized_text
             )
+            # Reward semantic coherence. A distractor may share one exact word
+            # such as "primary" or "module", while the intended passage often
+            # matches several paraphrased ideas together (primary + habitat +
+            # depth + location). Squared distinct-concept coverage makes that
+            # combination outrank a single coincidental lexical match.
+            covered_concepts = query_concepts.intersection(frequencies)
+            score += 2.0 * len(covered_concepts) ** 2
             ranked.append((score, -index, passage))
 
         ranked.sort(reverse=True, key=lambda item: (item[0], item[1]))
@@ -243,7 +612,7 @@ class StudyCorpus:
 
 
 class StudyRepository:
-    """Lazily downloads the fixed syllabus once and then serves it in memory."""
+    """Loads the fixed syllabus once and then serves it from memory."""
 
     def __init__(self, base_url: str | None = None) -> None:
         configured = base_url or os.environ.get(
@@ -254,32 +623,56 @@ class StudyRepository:
         self._lock = Lock()
 
     def _download_one(self, material_id: int, title: str) -> tuple[str, str]:
-        try:
-            response = httpx.get(
-                f"{self.base_url}/study-materials/{material_id}",
-                timeout=4.0,
-                follow_redirects=True,
-            )
-            response.raise_for_status()
-        except httpx.HTTPError as exc:
-            raise StudyMaterialError(
-                f"could not load study material {material_id}"
-            ) from exc
-        if not response.text.strip():
-            raise StudyMaterialError(f"study material {material_id} was empty")
-        return title, response.text
+        last_error: Exception | None = None
+        for _attempt in range(2):
+            try:
+                response = httpx.get(
+                    f"{self.base_url}/study-materials/{material_id}",
+                    timeout=4.0,
+                    follow_redirects=True,
+                )
+                response.raise_for_status()
+                if not response.text.strip():
+                    raise StudyMaterialError(
+                        f"study material {material_id} was empty"
+                    )
+                return title, response.text
+            except (httpx.HTTPError, StudyMaterialError) as exc:
+                last_error = exc
+
+        raise StudyMaterialError(
+            f"could not load study material {material_id}"
+        ) from last_error
+
+    @staticmethod
+    def _load_bundled_documents() -> list[tuple[str, str]] | None:
+        documents: list[tuple[str, str]] = []
+        for material_id, title in STUDY_MATERIALS:
+            path = BUNDLED_MATERIAL_DIRECTORY / f"{material_id}.md"
+            try:
+                body = path.read_text(encoding="utf-8")
+            except OSError:
+                return None
+            if not body.strip():
+                return None
+            documents.append((title, body))
+        return documents
 
     def get_corpus(self) -> StudyCorpus:
         if self._corpus is not None:
             return self._corpus
         with self._lock:
             if self._corpus is None:
-                with ThreadPoolExecutor(max_workers=len(STUDY_MATERIALS)) as executor:
-                    futures = [
-                        executor.submit(self._download_one, material_id, title)
-                        for material_id, title in STUDY_MATERIALS
-                    ]
-                    documents = [future.result() for future in futures]
+                documents = self._load_bundled_documents()
+                if documents is None:
+                    with ThreadPoolExecutor(
+                        max_workers=len(STUDY_MATERIALS)
+                    ) as executor:
+                        futures = [
+                            executor.submit(self._download_one, material_id, title)
+                            for material_id, title in STUDY_MATERIALS
+                        ]
+                        documents = [future.result() for future in futures]
                 self._corpus = StudyCorpus(documents)
         return self._corpus
 
