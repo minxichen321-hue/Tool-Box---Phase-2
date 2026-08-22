@@ -1,0 +1,11 @@
+services:
+  - type: web
+    name: tool-box-phase-2
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: python3 app.py
+    healthCheckPath: /health
+    envVars:
+      - key: TOOLBOX_API_BASE
+        value: https://tool-box-2591eaa24fa3.herokuapp.com
