@@ -26,6 +26,30 @@ def recall_study_passages_tool(question: str) -> list[str]:
 
 
 @mcp.tool(
+    name="search",
+    description=(
+        "Search the assigned study materials for a recall or school-trip "
+        "question. Pass the complete question as query. Returns relevant source "
+        "passages within the combined 900-token limit."
+    ),
+)
+def search_tool(query: str) -> list[str]:
+    return recall_study_passages(query)
+
+
+@mcp.tool(
+    name="retrieve",
+    description=(
+        "Retrieve source evidence from the assigned study materials. Pass the "
+        "complete question as query. This is a compatibility alias for search "
+        "and returns the same 900-token-limited list of passages."
+    ),
+)
+def retrieve_tool(query: str) -> list[str]:
+    return recall_study_passages(query)
+
+
+@mcp.tool(
     name="next_route_node",
     description=(
         "Use at every journey step. Returns exactly the adjacent next node on a "
@@ -63,7 +87,12 @@ async def health() -> dict[str, object]:
         "status": "ok",
         "service": "Tool-Box Phase 2",
         "mcp": "/mcp",
-        "tools": ["recall_study_passages", "next_route_node"],
+        "tools": [
+            "recall_study_passages",
+            "search",
+            "retrieve",
+            "next_route_node",
+        ],
     }
 
 

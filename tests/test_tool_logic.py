@@ -1,9 +1,11 @@
 import unittest
+from unittest.mock import Mock, patch
 
 import tiktoken
 
 from tool_logic import (
     JourneyGraph,
+    GraphClient,
     RECALL_TOKEN_LIMIT,
     RouteNotFoundError,
     StudyCorpus,
@@ -70,6 +72,35 @@ The daily fare cap is four pounds ninety.
 
 
 class RoutingTests(unittest.TestCase):
+    def test_padded_opaque_map_id_is_forwarded_unchanged(self) -> None:
+        map_id = (
+            "gAAAAABqiRM5wJJTn2ginyItG0HtpqFjuUAipnW-s_67o084XnL6EhUtSCcg"
+            "NpXl4wPHSWJdjV2Ih8DKXNI9PCQhg8lbldOz_w=="
+        )
+        response = Mock()
+        response.json.return_value = {
+            "adjacency": {"A": {"B": 1}},
+            "tolls": {"A": 0, "B": 0},
+        }
+
+        with patch("tool_logic.httpx.get", return_value=response) as get:
+            graph = GraphClient("https://example.test").fetch(map_id)
+
+        self.assertEqual(graph.adjacency["A"]["B"], 1)
+        get.assert_called_once_with(
+            "https://example.test/graph",
+            params={"map_id": map_id},
+            timeout=4.0,
+            follow_redirects=True,
+        )
+
+    def test_map_id_rejects_only_invalid_transport_values(self) -> None:
+        client = GraphClient("https://example.test")
+
+        for map_id in ("", "contains whitespace", "\n"):
+            with self.subTest(map_id=map_id), self.assertRaises(ValueError):
+                client.fetch(map_id)
+
     def test_entry_tolls_change_the_cheapest_route(self) -> None:
         graph = JourneyGraph.from_payload(
             {

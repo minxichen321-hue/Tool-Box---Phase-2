@@ -29,7 +29,6 @@ MAX_PASSAGES = 5
 MAX_CACHE_SIZE = 128
 
 _TOKEN_RE = re.compile(r"[a-z0-9]+(?:[-'][a-z0-9]+)*", re.IGNORECASE)
-_MAP_ID_RE = re.compile(r"^[A-Za-z0-9_-]{8,200}$")
 _ENCODING = tiktoken.get_encoding("o200k_base")
 _STOP_WORDS = {
     "a",
@@ -343,7 +342,15 @@ class GraphClient:
         self._lock = Lock()
 
     def fetch(self, map_id: str) -> JourneyGraph:
-        if not isinstance(map_id, str) or not _MAP_ID_RE.fullmatch(map_id):
+        # The challenge deliberately defines map_id as opaque. Real handles are
+        # URL-safe encrypted tokens and may contain Base64 padding such as "==".
+        # Validate only basic transport safety; never guess the token's format.
+        if (
+            not isinstance(map_id, str)
+            or not map_id
+            or len(map_id) > 2_048
+            or any(character.isspace() for character in map_id)
+        ):
             raise ValueError("map_id is not a valid opaque map handle")
         with self._lock:
             cached = self._cache.get(map_id)
