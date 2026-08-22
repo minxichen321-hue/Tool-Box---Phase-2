@@ -41,7 +41,7 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
             route_schema["required"],
             ["map_id", "current_node", "destination"],
         )
-        self.assertIn("hops_left", route_schema["properties"])
+        self.assertIn("hops_remaining", route_schema["properties"])
         self.assertNotIn("avoid_nodes", route_schema["properties"])
 
         for alias in tools[1:3]:
@@ -70,7 +70,7 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
         )
         recall.assert_has_calls([call("first question"), call("second question")])
 
-    async def test_route_tool_forwards_allowance_using_prompt_wording(self) -> None:
+    async def test_route_tool_forwards_remaining_hop_allowance(self) -> None:
         with patch("app.next_route_node", return_value="N08") as route:
             async with Client(mcp) as client:
                 result = await client.call_tool(
@@ -79,7 +79,7 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
                         "map_id": "opaque==",
                         "current_node": "N10",
                         "destination": "N05",
-                        "hops_left": 4,
+                        "hops_remaining": 4,
                     },
                 )
 

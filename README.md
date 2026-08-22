@@ -4,7 +4,7 @@ FastMCP solution for **Stage 2 — School Days**.
 
 ## MCP tools
 
-- `next_route_node(map_id, current_node, destination, hops_left)` is the single
+- `next_route_node(map_id, current_node, destination, hops_remaining)` is the single
   journey tool. Call it after every move. It returns the adjacent next node on
   a least-cost directed route, includes both edge weights and entry tolls, and
   applies the optional remaining-hop allowance supplied by the question.

@@ -19,21 +19,21 @@ mcp = FastMCP("Tool-Box Phase 2")
         "and call it again after every move until arrival. Return the node from "
         "this tool as the next move. Pass map_id, the node where the android is "
         "currently standing, and the requested destination. If the request says "
-        "there are N hops left, also pass hops_left=N; the current move counts as "
-        "one of those hops."
+        "there are N hops left, also pass hops_remaining=N; the current move "
+        "counts as one of those hops."
     ),
 )
 def next_route_node_tool(
     map_id: str,
     current_node: str,
     destination: str,
-    hops_left: int | None = None,
+    hops_remaining: int | None = None,
 ) -> str:
     return next_route_node(
         map_id=map_id,
         current_node=current_node,
         destination=destination,
-        hops_remaining=hops_left,
+        hops_remaining=hops_remaining,
     )
 
 
