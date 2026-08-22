@@ -30,26 +30,27 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(
             [tool.name for tool in tools],
             [
-                "recall_study_passages",
+                "next_route_node",
                 "search",
                 "retrieve",
-                "next_hop_with_limit",
-                "next_route_node",
+                "recall_study_passages",
             ],
         )
-        recall_schema = tools[0].inputSchema
-        self.assertEqual(recall_schema["required"], ["question"])
-        self.assertEqual(recall_schema["properties"]["question"]["type"], "string")
+        route_schema = tools[0].inputSchema
+        self.assertEqual(
+            route_schema["required"],
+            ["map_id", "current_node", "destination"],
+        )
+        self.assertIn("hops_left", route_schema["properties"])
+        self.assertNotIn("avoid_nodes", route_schema["properties"])
 
         for alias in tools[1:3]:
             self.assertEqual(alias.inputSchema["required"], ["query"])
             self.assertEqual(alias.inputSchema["properties"]["query"]["type"], "string")
 
-        limited_schema = tools[3].inputSchema
-        self.assertEqual(
-            limited_schema["required"],
-            ["map_id", "current_node", "destination", "hops_remaining"],
-        )
+        recall_schema = tools[3].inputSchema
+        self.assertEqual(recall_schema["required"], ["question"])
+        self.assertEqual(recall_schema["properties"]["question"]["type"], "string")
 
     async def test_observed_retrieval_aliases_return_passages(self) -> None:
         with patch(
@@ -69,16 +70,16 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
         )
         recall.assert_has_calls([call("first question"), call("second question")])
 
-    async def test_hop_limited_tool_requires_and_forwards_allowance(self) -> None:
+    async def test_route_tool_forwards_allowance_using_prompt_wording(self) -> None:
         with patch("app.next_route_node", return_value="N08") as route:
             async with Client(mcp) as client:
                 result = await client.call_tool(
-                    "next_hop_with_limit",
+                    "next_route_node",
                     {
                         "map_id": "opaque==",
                         "current_node": "N10",
                         "destination": "N05",
-                        "hops_remaining": 4,
+                        "hops_left": 4,
                     },
                 )
 
@@ -88,7 +89,6 @@ class McpContractTests(unittest.IsolatedAsyncioTestCase):
             current_node="N10",
             destination="N05",
             hops_remaining=4,
-            avoid_nodes=None,
         )
 
 

@@ -13,16 +13,28 @@ mcp = FastMCP("Tool-Box Phase 2")
 
 
 @mcp.tool(
-    name="recall_study_passages",
+    name="next_route_node",
     description=(
-        "Use for every question about the assigned study materials, including "
-        "school-trip questions that ask which STOP_ destination matches a place. "
-        "Pass the complete question once. It returns a list of source passages "
-        "within the 900-token recall limit; read them and answer from their facts."
+        "CALL THIS for every 'How can I get from START to DESTINATION?' question, "
+        "and call it again after every move until arrival. Return the node from "
+        "this tool as the next move. Pass map_id, the node where the android is "
+        "currently standing, and the requested destination. If the request says "
+        "there are N hops left, also pass hops_left=N; the current move counts as "
+        "one of those hops."
     ),
 )
-def recall_study_passages_tool(question: str) -> list[str]:
-    return recall_study_passages(question)
+def next_route_node_tool(
+    map_id: str,
+    current_node: str,
+    destination: str,
+    hops_left: int | None = None,
+) -> str:
+    return next_route_node(
+        map_id=map_id,
+        current_node=current_node,
+        destination=destination,
+        hops_remaining=hops_left,
+    )
 
 
 @mcp.tool(
@@ -50,56 +62,16 @@ def retrieve_tool(query: str) -> list[str]:
 
 
 @mcp.tool(
-    name="next_hop_with_limit",
+    name="recall_study_passages",
     description=(
-        "Always call this for a journey that states a hop or edge allowance. "
-        "Returns exactly the next adjacent node on the cheapest directed route "
-        "that can still reach the destination. hops_remaining is required and "
-        "includes the move being requested; pass the full allowance first and "
-        "decrement it after every move."
+        "Use for every question about the assigned study materials, including "
+        "school-trip questions that ask which STOP_ destination matches a place. "
+        "Pass the complete question once. It returns a list of source passages "
+        "within the 900-token recall limit; read them and answer from their facts."
     ),
 )
-def next_hop_with_limit_tool(
-    map_id: str,
-    current_node: str,
-    destination: str,
-    hops_remaining: int,
-    avoid_nodes: list[str] | None = None,
-) -> str:
-    return next_route_node(
-        map_id=map_id,
-        current_node=current_node,
-        destination=destination,
-        hops_remaining=hops_remaining,
-        avoid_nodes=avoid_nodes,
-    )
-
-
-@mcp.tool(
-    name="next_route_node",
-    description=(
-        "Use at every journey step. Returns exactly the adjacent next node on a "
-        "least-total-cost directed route, where cost is edge weights plus each "
-        "entered node's toll. Pass the opaque map_id, your current node, and the "
-        "required destination. If the prompt gives hops left, pass that number as "
-        "hops_remaining; it includes the move being requested. Optionally pass "
-        "previously visited nodes in avoid_nodes."
-    ),
-)
-def next_route_node_tool(
-    map_id: str,
-    current_node: str,
-    destination: str,
-    hops_remaining: int | None = None,
-    avoid_nodes: list[str] | None = None,
-) -> str:
-    return next_route_node(
-        map_id=map_id,
-        current_node=current_node,
-        destination=destination,
-        hops_remaining=hops_remaining,
-        avoid_nodes=avoid_nodes,
-    )
+def recall_study_passages_tool(question: str) -> list[str]:
+    return recall_study_passages(question)
 
 
 mcp_app = mcp.http_app(path="/")
@@ -114,11 +86,10 @@ async def health() -> dict[str, object]:
         "service": "Tool-Box Phase 2",
         "mcp": "/mcp",
         "tools": [
-            "recall_study_passages",
+            "next_route_node",
             "search",
             "retrieve",
-            "next_hop_with_limit",
-            "next_route_node",
+            "recall_study_passages",
         ],
     }
 
